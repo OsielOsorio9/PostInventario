@@ -20,7 +20,13 @@ where node >nul 2>nul
 if %ERRORLEVEL% NEQ 0 (
     echo [X] Node.js no está instalado
     echo.
-    echo Descarga Node.js desde:
+    echo ========================================
+    echo SOLUCIÓN RÁPIDA
+    echo ========================================
+    echo.
+    echo Ejecuta primero: instalar.bat
+    echo.
+    echo O instala Node.js desde:
     echo https://nodejs.org/
     echo.
     pause
@@ -33,15 +39,52 @@ echo.
 
 REM Verificar que las dependencias estén instaladas
 if not exist "node_modules" (
-    echo [!] Instalando dependencias...
-    call npm install
+    echo [!] Dependencias no instaladas
     echo.
+    echo ========================================
+    echo Instalando dependencias...
+    echo ========================================
+    echo.
+    echo Esto puede tardar 2-5 minutos
+    echo.
+    call npm install
+    
+    if %ERRORLEVEL% NEQ 0 (
+        echo.
+        echo [X] Error al instalar dependencias
+        echo.
+        echo Soluciones:
+        echo 1. Ejecuta: instalar.bat
+        echo 2. Verifica tu conexión a internet
+        echo 3. Ejecuta como administrador
+        echo.
+        pause
+        exit /b 1
+    )
+    echo.
+)
+
+REM Verificar que vite esté disponible
+where vite >nul 2>nul
+if %ERRORLEVEL% NEQ 0 (
+    if not exist "node_modules\.bin\vite.cmd" (
+        echo [X] Vite no está instalado correctamente
+        echo.
+        echo Ejecuta: instalar.bat
+        echo.
+        pause
+        exit /b 1
+    )
 )
 
 echo [OK] Dependencias instaladas
 echo.
+echo ========================================
 echo Iniciando servidor de desarrollo...
-echo La aplicación estará disponible en: http://localhost:3000
+echo ========================================
+echo.
+echo La aplicación estará disponible en:
+echo http://localhost:3000
 echo.
 echo Presiona Ctrl+C para detener el servidor
 echo.
