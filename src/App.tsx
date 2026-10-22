@@ -14,6 +14,7 @@ Chart.register(...registerables);
 
 const toUSD = (cup: number, tasa: number) => tasa > 0 ? cup / tasa : 0;
 const toCUP = (usd: number, tasa: number) => usd * tasa;
+const numVal = (v: number | undefined | null) => v === undefined || v === null ? '' : v;
 
 // ============ TOAST ============
 type Toast = { id: number; msg: string; type: 'ok' | 'err' | 'warn' | 'info' };
@@ -305,8 +306,34 @@ function Inventory({ cfg }: { cfg: Record<string, any> }) {
 
   const save = async () => {
     if (!form.nombre?.trim()) { showToast('Nombre requerido', 'err'); return; }
-    if (editItem) { await dbPut('productos', { ...editItem, ...form }); showToast('Actualizado', 'ok'); }
-    else { await dbAdd('productos', { ...form, creado: Date.now() } as Producto); showToast('Creado', 'ok'); }
+    
+    if (editItem) {
+      // Recalcular PEP si cambió el precio de compra
+      let newPep = editItem.pep;
+      let newPepUSD = editItem.pepUSD;
+      
+      if (form.compraCUP !== undefined && form.compraCUP !== editItem.compraCUP) {
+        if (editItem.stock > 0) {
+          newPep = (editItem.stock * editItem.pep + (form.compraCUP - editItem.compraCUP)) / editItem.stock;
+        } else {
+          newPep = form.compraCUP;
+        }
+      }
+      
+      if (form.compraUSD !== undefined && form.compraUSD !== editItem.compraUSD) {
+        if (editItem.stock > 0) {
+          newPepUSD = (editItem.stock * editItem.pepUSD + (form.compraUSD - editItem.compraUSD)) / editItem.stock;
+        } else {
+          newPepUSD = form.compraUSD;
+        }
+      }
+      
+      await dbPut('productos', { ...editItem, ...form, pep: newPep, pepUSD: newPepUSD });
+      showToast('Actualizado', 'ok');
+    } else {
+      await dbAdd('productos', { ...form, creado: Date.now() } as Producto);
+      showToast('Creado', 'ok');
+    }
     setModal(false); load();
   };
 
@@ -382,12 +409,12 @@ function Inventory({ cfg }: { cfg: Record<string, any> }) {
           <div><label className="text-xs font-medium">Código</label><input className="input" value={form.codigo || ''} onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))} /></div>
           <div><label className="text-xs font-medium">Categoría</label><select className="input" value={form.categoria || ''} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>{(cfg.cats || []).map((c: string) => <option key={c}>{c}</option>)}</select></div>
           <div><label className="text-xs font-medium">Unidad</label><select className="input" value={form.unidad || ''} onChange={e => setForm(f => ({ ...f, unidad: e.target.value }))}>{(cfg.units || []).map((u: string) => <option key={u}>{u}</option>)}</select></div>
-          <div><label className="text-xs font-medium">Stock</label><input type="number" className="input" value={form.stock || 0} onChange={e => setForm(f => ({ ...f, stock: +e.target.value }))} /></div>
-          <div><label className="text-xs font-medium">Stock Mín.</label><input type="number" className="input" value={form.min || 0} onChange={e => setForm(f => ({ ...f, min: +e.target.value }))} /></div>
-          <div><label className="text-xs font-medium">Compra CUP</label><input type="number" className="input" value={form.compraCUP || 0} onChange={e => handleCompraCUP(+e.target.value)} /></div>
-          <div><label className="text-xs font-medium">Compra USD</label><input type="number" className="input" value={form.compraUSD || 0} onChange={e => handleCompraUSD(+e.target.value)} /></div>
-          <div><label className="text-xs font-medium">Venta CUP</label><input type="number" className="input" value={form.ventaCUP || 0} onChange={e => handleVentaCUP(+e.target.value)} /></div>
-          <div><label className="text-xs font-medium">Venta USD</label><input type="number" className="input" value={form.ventaUSD || 0} onChange={e => handleVentaUSD(+e.target.value)} /></div>
+          <div><label className="text-xs font-medium">Stock</label><input type="number" className="input" value={numVal(form.stock)} onChange={e => setForm(f => ({ ...f, stock: e.target.value === '' ? 0 : +e.target.value }))} /></div>
+          <div><label className="text-xs font-medium">Stock Mín.</label><input type="number" className="input" value={numVal(form.min)} onChange={e => setForm(f => ({ ...f, min: e.target.value === '' ? 0 : +e.target.value }))} /></div>
+          <div><label className="text-xs font-medium">Compra CUP</label><input type="number" className="input" value={numVal(form.compraCUP)} onChange={e => handleCompraCUP(e.target.value === '' ? 0 : +e.target.value)} /></div>
+          <div><label className="text-xs font-medium">Compra USD</label><input type="number" className="input" value={numVal(form.compraUSD)} onChange={e => handleCompraUSD(e.target.value === '' ? 0 : +e.target.value)} /></div>
+          <div><label className="text-xs font-medium">Venta CUP</label><input type="number" className="input" value={numVal(form.ventaCUP)} onChange={e => handleVentaCUP(e.target.value === '' ? 0 : +e.target.value)} /></div>
+          <div><label className="text-xs font-medium">Venta USD</label><input type="number" className="input" value={numVal(form.ventaUSD)} onChange={e => handleVentaUSD(e.target.value === '' ? 0 : +e.target.value)} /></div>
           <div className="col-span-2"><label className="text-xs font-medium">Foto</label><input type="file" accept="image/*" className="input" onChange={handleFoto} />{form.foto && <img src={form.foto} className="mt-2 w-20 h-20 object-cover rounded" />}</div>
         </div>
         <div className="flex gap-2 mt-4 justify-end"><button className="btn btn-ghost" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-primary" onClick={save}>Guardar</button></div>
@@ -942,7 +969,7 @@ function Expenses({ cfg }: { cfg: Record<string, any> }) {
       <div className="grid-3 mb-4"><div className="kpi"><div className="kpi-label">Mes CUP</div><div className="kpi-value">{fmt(gastosMes.reduce((s, g) => s + g.montoCUP, 0))}</div></div><div className="kpi" style={{ borderLeftColor: 'var(--ok)' }}><div className="kpi-label">Mes USD</div><div className="kpi-value">{fmt(gastosMes.reduce((s, g) => s + g.montoUSD, 0))}</div></div><div className="kpi" style={{ borderLeftColor: 'var(--warn)' }}><div className="kpi-label">Total</div><div className="kpi-value">{fmt(gastos.reduce((s, g) => s + g.montoCUP, 0))}</div></div></div>
       <div className="flex justify-end mb-4"><button className="btn btn-primary" onClick={openNew}>+ Nuevo Gasto</button></div>
       <div className="card table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Cat.</th><th>CUP</th><th>USD</th><th></th></tr></thead><tbody>{[...gastos].sort((a, b) => b.fecha - a.fecha).map(g => (<tr key={g.id}><td className="text-xs">{fmtDate(g.fecha)}</td><td>{g.concepto}</td><td>{g.categoria}</td><td>{fmt(g.montoCUP)}</td><td>{fmt(g.montoUSD)}</td><td><button className="btn btn-ghost btn-sm" onClick={() => openEdit(g)}>✏️</button> <button className="btn btn-ghost btn-sm" onClick={() => del(g)}>🗑️</button></td></tr>))}</tbody></table></div>
-      <Modal open={modal} onClose={() => setModal(false)} title={editItem ? 'Editar' : 'Nuevo Gasto'}><div className="space-y-3"><div><label className="text-xs font-medium">Concepto *</label><input className="input" value={form.concepto || ''} onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} /></div><div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-medium">Categoría</label><select className="input" value={form.categoria || ''} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>{cats.map(c => <option key={c}>{c}</option>)}</select></div><div><label className="text-xs font-medium">Fecha</label><input type="date" className="input" value={form.fecha ? new Date(form.fecha).toISOString().split('T')[0] : ''} onChange={e => setForm(f => ({ ...f, fecha: new Date(e.target.value).getTime() }))} /></div><div><label className="text-xs font-medium">Monto CUP</label><input type="number" className="input" value={form.montoCUP || 0} onChange={e => handleMontoCUP(+e.target.value)} /></div><div><label className="text-xs font-medium">Monto USD</label><input type="number" className="input" value={form.montoUSD || 0} onChange={e => handleMontoUSD(+e.target.value)} /></div></div></div><div className="flex gap-2 mt-4 justify-end"><button className="btn btn-ghost" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-primary" onClick={save}>Guardar</button></div></Modal>
+      <Modal open={modal} onClose={() => setModal(false)} title={editItem ? 'Editar' : 'Nuevo Gasto'}><div className="space-y-3"><div><label className="text-xs font-medium">Concepto *</label><input className="input" value={form.concepto || ''} onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} /></div><div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-medium">Categoría</label><select className="input" value={form.categoria || ''} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>{cats.map(c => <option key={c}>{c}</option>)}</select></div><div><label className="text-xs font-medium">Fecha</label><input type="date" className="input" value={form.fecha ? new Date(form.fecha).toISOString().split('T')[0] : ''} onChange={e => setForm(f => ({ ...f, fecha: new Date(e.target.value).getTime() }))} /></div><div><label className="text-xs font-medium">Monto CUP</label><input type="number" className="input" value={numVal(form.montoCUP)} onChange={e => handleMontoCUP(e.target.value === '' ? 0 : +e.target.value)} /></div><div><label className="text-xs font-medium">Monto USD</label><input type="number" className="input" value={numVal(form.montoUSD)} onChange={e => handleMontoUSD(e.target.value === '' ? 0 : +e.target.value)} /></div></div></div><div className="flex gap-2 mt-4 justify-end"><button className="btn btn-ghost" onClick={() => setModal(false)}>Cancelar</button><button className="btn btn-primary" onClick={save}>Guardar</button></div></Modal>
     </div>
   );
 }
